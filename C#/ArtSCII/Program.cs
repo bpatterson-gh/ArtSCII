@@ -6,8 +6,6 @@ using System.Text;
 using Bitmap = System.Drawing.Bitmap;
 using Color = System.Drawing.Color;
 using File = System.IO.File;
-using Font = System.Drawing.Font;
-using FontStyle = System.Drawing.FontStyle;
 using FStream = System.IO.FileStream;
 using Graphics = System.Drawing.Graphics;
 using ImageFormat = System.Drawing.Imaging.ImageFormat;
@@ -24,6 +22,7 @@ namespace ArtSCII
         static int fontSize = 8;
         public static uint charWidth, charHeight;
         static float scale = 1;
+        static float overlap = 1;
         static uint logMode = 3;
         static bool html;
         public static bool grey, openCL;
@@ -74,15 +73,20 @@ namespace ArtSCII
                             "  -fontsize <n> | Sets the font size in pixels. <n> Must be an integer. Default is 8 pixels.\n" +
                             "  -grey | Produces a greyscale output.\n" +
                             "  -logmode <n> | Specifies the console log mode. 0 = Silent, 1 = Errors only, 2 = Errors and Warnings, 3 = All. Default is 3.\n" +
+                            "  -overlap <n> | Specifies the overlap multiplier. This will increase the font size used to render the output without changing the character spacing. Cannot be used with HTML outputs.\n" +
                             "  -scale <n> | Scales the output by <n>."
                             );
                         return "NoError";
                     case "-logmode":
                         if (!uint.TryParse(args[++i], out logMode) || logMode > 3) return "Log mode must be a number between 0 and 3.";
                         break;
+                    case "-overlap":
+                        if (!float.TryParse(args[++i], out overlap) || logMode > 3) return "Overlap must be a number greater than 0.";
+                        if (overlap == 0) return "Overlap cannot be 0.";
+                        break;
                     case "-scale":
                         if (!float.TryParse(args[++i], out scale)) return "Scale must be a number.";
-                        scale = 1 / scale;
+                        if (scale == 0) return "Scale cannot be 0.";
                         break;
                     default:
                         if (inPath == string.Empty) inPath = args[i];
@@ -91,7 +95,6 @@ namespace ArtSCII
                 }
             }
             if (outPath == string.Empty) return "You must provide an input and output file path.";
-            if (fontSize * scale < 4) return "The scale is too large for this font size. Either increase the font size or decrease the scale.";
 
             SetOutputFileType(outPath);
 
@@ -106,7 +109,11 @@ namespace ArtSCII
         {
             outPath = outPath.ToLower();
             html = (outPath.EndsWith(".htm") || outPath.EndsWith(".html"));
-            if (html) return;
+            if (html)
+            {
+                if (overlap != 1) Log(LogType.Warning, "Overlap is not supported for HTML outputs.");
+                return;
+            }
             else if (outPath.EndsWith(".bmp")) outputFmt = ImageFormat.Bmp;
             else if (outPath.EndsWith(".gif")) outputFmt = ImageFormat.Gif;
             else if (outPath.EndsWith(".jpg")) outputFmt = ImageFormat.Jpeg;
@@ -203,6 +210,18 @@ namespace ArtSCII
         /// <returns>Bitmap</returns>
         static Bitmap FormatOutputBmp(int inputW, int inputH, List<Tuple<char, Color>> ascii, string fontName, int fontSize)
         {
+            if (scale != 1)
+            {
+                inputW = (int)(inputW * scale);
+                inputH = (int)(inputH * scale);
+                fontSize = (int)(fontSize * scale);
+            }
+            if (overlap != 1)
+            {
+                fontSize = (int)(fontSize * overlap);
+            }
+
+            AsciiFont outFont = new AsciiFont(fontName, fontSize);
             Bitmap bmp = new PixelSet((uint)inputW, (uint)inputH, 0x11).ToBitmap();
             SolidBrush b = new SolidBrush(Color.White);
             Graphics g = Graphics.FromImage(bmp);
@@ -219,22 +238,22 @@ namespace ArtSCII
             }
             if (lineW == -1) lineW = ascii.Count;
 
-            float padW = (inputW - (lineW * charWidth)) * 0.5f;
-            PointF textPos = new PointF(padW, (inputH - (charHeight * numLines)) * 0.5f);
+            float padW = (inputW - (lineW * charWidth * scale)) * 0.5f;
+            PointF textPos = new PointF(padW, (inputH - (charHeight * numLines * scale)) * 0.5f);
 
             for (int i = 0; i < ascii.Count; i++)
             {
                 string str = string.Empty + ascii[i].Item1;
                 b.Color = ascii[i].Item2;
 
-                g.DrawString(str, asciiFont.Font, b, textPos);
+                g.DrawString(str, outFont.Font, b, textPos);
 
                 if (str == "\n")
                 {
                     textPos.X = padW;
-                    textPos.Y += charHeight;
+                    textPos.Y += (int)(charHeight * scale);
                 }
-                else textPos.X += charWidth;
+                else textPos.X += (int)(charWidth * scale);
             }
 
             g.Flush();
@@ -264,7 +283,7 @@ namespace ArtSCII
                 else colorCounts.Add(c, 1);
             }
             string html = "<!-- Generated by ArtSCII on " + DateTime.Now.ToString() + " -->\n" +
-            "<!-- For more information, visit https://bpatterson.dev/projects/ArtSCII -->\n\n" +
+            "<!-- For more information, visit https://bpatterson.dev/projects/artscii -->\n\n" +
             "<!DOCTYPE html><html><head><style>\n";
             Color[] colors = colorCounts.Keys.ToArray();
             for (int i = 0; i < colors.Length; i++)
@@ -275,7 +294,7 @@ namespace ArtSCII
                     c.R.ToString("x2") + c.G.ToString("x2") + c.B.ToString("x2") + ";}\n";
             }
             html += "\nbody{font-family:\"" + asciiFont.FontName + "\",monospace;" +
-                "font-size:" + (int)(asciiFont.FontSize / scale) + 
+                "font-size:" + (int)(asciiFont.FontSize * scale) +
                 "px;background-color:#111111;white-space:pre;}\n</style></head><body>\n";
             Color last = Color.FromArgb(0, 0, 0, 0);
             string colorStr;
@@ -378,8 +397,8 @@ namespace ArtSCII
 
             openCL = OCL.OCL_Init();
             if (!openCL) return;
-            asciiFont = new AsciiFont(fontName, (int)(fontSize * scale));
-            Log(LogType.Info, "Font is \"{0}\" ({1}px)", asciiFont.FontName, (int)(fontSize * scale));
+            asciiFont = new AsciiFont(fontName, fontSize);
+            Log(LogType.Info, "Font is \"{0}\" ({1}px)", asciiFont.FontName, fontSize);
 
             var en = asciiFont.characters.Values.GetEnumerator();
             en.MoveNext();
@@ -398,10 +417,11 @@ namespace ArtSCII
             }
             else
             {
-                Bitmap outBmp = FormatOutputBmp(input.Width, input.Height, ascii, fontName, (int)(fontSize * scale));
+                Bitmap outBmp = FormatOutputBmp(input.Width, input.Height, ascii, fontName, fontSize);
                 outBmp.Save(output, outputFmt);
                 outBmp.Dispose();
             }
+            Log(LogType.Done, "Done");
 
             output.Close();
             output.Dispose();

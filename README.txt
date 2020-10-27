@@ -4,20 +4,6 @@ Generates high-quality ASCII art from images.
 Requirements:
   64-bit Windows with .NET Framework version 4.7.2
   OpenCL compatible CPU or GPU
-  
-Compiling:
-  The C# portion of the project is a Visual Studio solution and can be compiled via VS Community 2019.
-  The C portion can be compiled with the following gcc commands:
-    gcc -I. -c "src\addimg.c" -o "obj\addimg.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\addscl.c" -o "obj\addscl.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\artscii.c" -o "obj\artscii.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\charactermatch.c" -o "obj\charactermatch.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\compare.c" -o "obj\compare.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\convolve.c" -o "obj\convolve.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\debug.c" -o "obj\debug.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\mult.c" -o "obj\mult.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-	gcc -L. -shared -o "artscii.dll" "obj\addimg.o" "obj\addscl.o" "obj\artscii.o" "obj\charactermatch.o" "obj\compare.o" "obj\convolve.o" "obj\debug.o" "obj\mult.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-  These commands are included in C\compile.bat for convenience.
 
 Usage:
   .\ArtSCII "input" "output" [optional parameters]
@@ -31,6 +17,7 @@ Usage:
       -fontsize <n> | Sets the font size in pixels. <n> Must be an integer. Default is 8 pixels.
       -grey | Produces a greyscale output.
       -logmode <n> | Specifies the console log mode. 0 = Silent, 1 = Errors only, 2 = Errors and Warnings, 3 = All. Default is 3.
-      -scale <n> | Scales the output by <n>.
+      -overlap <n> | Specifies the overlap multiplier. This will increase the font size used to render the output without changing the character spacing. Cannot be used with HTML outputs.
+	  -scale <n> | Scales the output by <n>.
 	  
   This information can also be found by running artscii in a cmd window with no arguments.
