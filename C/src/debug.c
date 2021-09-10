@@ -8,9 +8,9 @@ bool _dump_mem_obj(cl_mem obj, size_t length) {
 	unsigned char *outs = malloc(length);
 	result = clEnqueueReadBuffer(queue, obj, CL_TRUE,
 		0, length, outs, 0, NULL, NULL);
-	checkResultAndFree(outs)
+	CHECK_RESULT_AND_FREE(outs)
 	result = clFinish(queue);
-	checkResultAndFree(outs)
+	CHECK_RESULT_AND_FREE(outs)
 
 	printf("\n%02x ", outs[0]);
 	for (size_t i = 1; i < length; i++) {
@@ -29,17 +29,7 @@ void dumpMemObj(cl_mem obj, size_t length) {
 }
 
 // Writes a cl_mem object to a BMP file
-bool dumpBitmap(cl_mem obj, const char *fileName, int width, int height) {
-	unsigned int length = width * height * 3;
-
-	// Get image data from buffer before attempting to create the file
-	unsigned char *outs = malloc(length);
-
-	result = clEnqueueReadBuffer(queue, obj, CL_TRUE, 0, length, outs, 0, NULL, NULL);
-	checkResultAndFree(outs)
-	result = clFinish(queue);
-	checkResultAndFree(outs)
-
+bool nocl_dumpBitmap(unsigned char *outs, const char *fileName, int width, int height) {
 	unsigned int dibSize = 40,
 				 zero = 0,
 				 padRow = (((width * 3) % 4) == 0)? 0 : 4 - ((width * 3) % 4),
@@ -90,12 +80,29 @@ bool dumpBitmap(cl_mem obj, const char *fileName, int width, int height) {
 	}
 
 	fclose(bmp);
-	free(outs);
 	return true;
 }
 
-// Compile this to debug
+bool dumpBitmap(cl_mem obj, const char *fileName, int width, int height) {
+	unsigned int length = width * height * 3;
+
+	// Get image data from buffer before attempting to create the file
+	unsigned char *outs = malloc(length);
+
+	result = clEnqueueReadBuffer(queue, obj, CL_TRUE, 0, length, outs, 0, NULL, NULL);
+	CHECK_RESULT_AND_FREE(outs)
+	result = clFinish(queue);
+	CHECK_RESULT_AND_FREE(outs)
+
+	bool ret = nocl_dumpBitmap(outs, fileName, width, height);
+	free(outs);
+	return ret;
+}
+
+// Compile this to run some tests
 int main() {
+	printf("Beginning image dump test.\n");
+
 	unsigned char square[] = { 255, 0, 0,    0, 255, 0,      0, 0, 255,
 						 	   255, 255, 0,  0, 255, 255,    255, 0, 255,
 						 	   0, 0, 0,      127, 127, 127,  255, 255, 255 };
@@ -110,23 +117,34 @@ int main() {
 						 	     0, 0, 255,  255, 0, 255 };
 	int tallRectW = 2, tallRectH = 3;
 
-	if(!OCL_Init()) return -1;
-	cl_int result;
+	bool OCL = false;
+	if(OCL_Init()) OCL = true;
 
-	cl_mem squareMem = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,
-		squareW * squareH * 3, square, &result);
-	checkResult(-2)
-	cl_mem fatRectMem = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,
-		fatRectW * fatRectH * 3, fatRect, &result);
-	checkResult(-2)
-	cl_mem tallRectMem = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,
-		tallRectW * tallRectH * 3, tallRect, &result);
-	checkResult(-2)
+	if (OCL) {
+		printf("OpenCL is supported on this machine.\n");
+		cl_int result;
+		cl_mem squareMem = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,
+			squareW * squareH * 3, square, &result);
+		CHECK_RESULT(-2)
+		cl_mem fatRectMem = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,
+			fatRectW * fatRectH * 3, fatRect, &result);
+		CHECK_RESULT(-2)
+		cl_mem tallRectMem = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,
+			tallRectW * tallRectH * 3, tallRect, &result);
+		CHECK_RESULT(-2)
 
-	dumpBitmap(squareMem, "DebugFiles\\square.bmp", squareW, squareH);
-	dumpBitmap(fatRectMem, "DebugFiles\\fatRect.bmp", fatRectW, fatRectH);
-	dumpBitmap(tallRectMem, "DebugFiles\\tallRect.bmp", tallRectW, tallRectH);
+		dumpBitmap(squareMem, "DebugFiles/square.bmp", squareW, squareH);
+		dumpBitmap(fatRectMem, "DebugFiles/fatRect.bmp", fatRectW, fatRectH);
+		dumpBitmap(tallRectMem, "DebugFiles/tallRect.bmp", tallRectW, tallRectH);
+	}
+	else {
+		printf("OpenCL is not supported/installed on this machine.\n");
+		nocl_dumpBitmap(square, "DebugFiles/nocl_square.bmp", squareW, squareH);
+		nocl_dumpBitmap(fatRect, "DebugFiles/nocl_fatRect.bmp", fatRectW, fatRectH);
+		nocl_dumpBitmap(tallRect, "DebugFiles/nocl_tallRect.bmp", tallRectW, tallRectH);
+	}
 
-	OCL_Cleanup();
+	printf("Test completed successfully. Images can be seen in DebugFiles\n");
+	if (OCL) OCL_Cleanup();
 	return 0;
 }

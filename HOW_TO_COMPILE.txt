@@ -1,12 +1,61 @@
-The C# portion of the project is a Visual Studio solution and can be compiled via VS Community 2019.
-The C portion can be compiled with the following gcc commands:
-    gcc -I. -c "src\addimg.c" -o "obj\addimg.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\addscl.c" -o "obj\addscl.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\artscii.c" -o "obj\artscii.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\charactermatch.c" -o "obj\charactermatch.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\compare.c" -o "obj\compare.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\convolve.c" -o "obj\convolve.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\debug.c" -o "obj\debug.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-    gcc -I. -c "src\mult.c" -o "obj\mult.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-	gcc -L. -shared -o "artscii.dll" "obj\addimg.o" "obj\addscl.o" "obj\artscii.o" "obj\charactermatch.o" "obj\compare.o" "obj\convolve.o" "obj\debug.o" "obj\mult.o" -lmingw32 -lSDL2main -lSDL2 -mwindows -lopencl -std=gnu99 -m64
-These commands are included in C\compile.bat for convenience.
+Linux:
+
+1. Install the OpenCL SDK - https://github.com/KhronosGroup/OpenCL-SDK
+
+2. Install mono-complete - https://www.mono-project.com/download/stable/#download-lin
+
+3. Build artscii's C library using compile.sh (in the C folder) or equivalent terminal commands
+    If using compile.sh, make sure to rename references to /usr/include and /usr/lib so they point to your OpenCL headers/libraries from step 1
+
+4. Build ArtSCII.exe by using Mono's xbuild tool:
+    xbuild /property:Configuration=Nix-Release /property:Platform=x64 CSharp/ArtSCII/ArtSCII.csproj
+
+    Available configurations are Nix-Debug and Nix-Release
+
+5. If you want a native binary, you can run the following command to generate one:
+    mkbundle -o artscii --simple ArtSCII.exe --machine-config /etc/mono/4.5/machine.config --config /etc/mono/mconfig/config.xml
+
+    You can uninstall Mono and the native binary will still function. You must keep Cairo installed, though.
+
+
+Windows:
+
+1. Install the OpenCL SDK - https://github.com/KhronosGroup/OpenCL-SDK
+
+2. Install Mono 64-bit (No GTK#) and Mono Gtk# - https://www.mono-project.com/download/stable/#download-win
+
+3. Install MSYS2 - https://www.msys2.org/
+    After installing and updating packages as shown on the website, install Cairo with pacman -S mingw-w64-x86_64-cairo
+
+4. Add the directory containing libcairo-2.dll to the PATH environment variable
+    The default is C:\msys64\mingw64\bin
+
+5. Build artscii's C library using compile.bat (in the C folder) or equivalent terminal commands
+    If using compile.bat, make sure to rename references to C:\include and C:\lib so they point to your OpenCL headers/libraries from step 1
+
+6. Build ArtSCII.exe with CSharp/ArtSCII.sln or by using Mono's xbuild tool:
+    xbuild /property:Configuration=Win-Release /property:Platform=x64 CSharp/ArtSCII/ArtSCII.csproj
+
+    Available configurations are Win-Debug and Win-Release
+
+7. [Optional] Bundle all DLLs and ArtSCII.exe into the same folder, so it can be used without MSYS2
+    The following MSYS2 libraries are dependencies:
+     libbrotlicommon.dll
+     libbrotlidec.dll
+     libbz2-1.dll
+     libcairo-2.dll
+     libexpat-1.dll
+     libfontconfig-1.dll
+     libfreetype-6.dll
+     libgcc_s_seh-1.dll
+     libglib-2.0-0.dll
+     libgraphite2.dll
+     libharfbuzz-0.dll
+     libiconv-2.dll
+     libintl-8.dll
+     libpcre-1.dll
+     libpixman-1-0.dll
+     libpng16-16.dll
+     libstdc++-6.dll
+     libwinpthread-1.dll
+     zlib1.dll

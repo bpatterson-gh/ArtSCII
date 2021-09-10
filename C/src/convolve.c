@@ -5,7 +5,7 @@ MultiConvolveArgs *multiConvolveArgs = NULL;
 cl_kernel clkConvolve;
 
 extern bool AddImg(size_t length, cl_mem imgA, cl_mem imgB, cl_mem *sum);
-extern bool Mult(size_t length, cl_mem imgA, float scalar, cl_mem *product);
+extern int loadImage(ImageInfo *imgBufs, cl_mem *clBuf, size_t offset);
 
 void freeMultiConvolveArgs() {
 	if (multiConvolveArgs != NULL) {
@@ -36,12 +36,12 @@ bool loadKernels(KernelInfo *kernelBufs, size_t numKernels) {
 	for (int i = 0; i < numKernels; i++) {
 		multiConvolveArgs->kernels[i] = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,
 			kernelBufs[i].bufSize * sizeof(float), kernelBufs[i].buffer, &result);
-		checkResult(false)
+		CHECK_RESULT(false)
 
 		unsigned int knlSize[2] = { kernelBufs[i].width, kernelBufs[i].height };
 		multiConvolveArgs->knlSizes[i] = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,
 			sizeof(unsigned int) * 2, knlSize, &result);
-		checkResult(false)
+		CHECK_RESULT(false)
 
 		multiConvolveArgs->knlMults[i] = kernelBufs[i].mult;
 		multiConvolveArgs->knlInverts[i] = kernelBufs[i].invert? 1 : 0;
@@ -52,13 +52,13 @@ bool loadKernels(KernelInfo *kernelBufs, size_t numKernels) {
 // Sets the current Kernel to the one at index i
 bool setStdKernel(size_t i) {
 	result = clSetKernelArg(clkConvolve, 2, sizeof(cl_mem), &multiConvolveArgs->kernels[i]);
-	checkResult(false)
+	CHECK_RESULT(false)
 	result = clSetKernelArg(clkConvolve, 3, sizeof(cl_mem), &multiConvolveArgs->knlSizes[i]);
-	checkResult(false)
+	CHECK_RESULT(false)
 	result = clSetKernelArg(clkConvolve, 4, sizeof(float), &multiConvolveArgs->knlMults[i]);
-	checkResult(false)
+	CHECK_RESULT(false)
 	result = clSetKernelArg(clkConvolve, 5, sizeof(unsigned char), &multiConvolveArgs->knlInverts[i]);
-	checkResult(false)
+	CHECK_RESULT(false)
 	return true;
 }
 
@@ -69,7 +69,7 @@ bool setMultiConvolveArgs(ImageInfo *imgBufs, KernelInfo *kernels, size_t numKer
 
 	multiConvolveArgs->input = clCreateBuffer(context, CL_MEM_READ_ONLY,
 		imgBufs[0].width * imgBufs[0].height * 3, NULL, &result);
-	checkResult(false)
+	CHECK_RESULT(false)
 
 	if(loadImage(imgBufs, &multiConvolveArgs->input, 0) == -1) return false;
 
@@ -77,7 +77,7 @@ bool setMultiConvolveArgs(ImageInfo *imgBufs, KernelInfo *kernels, size_t numKer
 	for (int k = 0; k < numKernels; k++) {
 		multiConvolveArgs->outputs[k] = clCreateBuffer(context, CL_MEM_READ_WRITE,
 			imgBufs[0].width * imgBufs[0].height * 3, NULL, &result);
-		checkResult(false)
+		CHECK_RESULT(false)
 	}
 
 	if (!loadKernels(kernels, numKernels)) return false;
@@ -94,17 +94,17 @@ bool pad(cl_mem *img, cl_mem *padded, size_t imgW, size_t imgH, size_t kernelW, 
 	size_t offset = 0; // Start at the beginning of the input
 	size_t padOffset = (padW * 3) + ((kernelW / 2) * 3); // Empty first row + Initial padding for second row
 	for (size_t row = 0; row < imgH; row++) {
-		result = clEnqueueReadBuffer(queue, *img, CL_TRUE,	offset, imgW * 3, &temp[padOffset], 0, NULL, NULL);
-		checkResultAndFree(temp)
+		result = clEnqueueReadBuffer(queue, *img, CL_TRUE, offset, imgW * 3, &temp[padOffset], 0, NULL, NULL);
+		CHECK_RESULT_AND_FREE(temp)
 		offset += imgW * 3;
 		padOffset += padW * 3;
 	}
 	result = clFinish(queue);
-	checkResultAndFree(temp)
+	CHECK_RESULT_AND_FREE(temp)
 
 	if (padded != NULL) clReleaseMemObject(*padded);
 	*padded = clCreateBuffer(context, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR, padW * padH * 3, temp, &result);
-	checkResultAndFree(temp)
+	CHECK_RESULT_AND_FREE(temp)
 
 	free(temp);
 	return true;
@@ -119,23 +119,23 @@ bool convolve(cl_mem *input, ImageInfo imgBuf, KernelInfo kernelBuf, unsigned in
 	cl_mem padded = NULL;
 	pad(input, &padded, imgBuf.width, imgBuf.height, kernelBuf.width, kernelBuf.height);
 	result = clSetKernelArg(clkConvolve, 0, sizeof(cl_mem), &padded);
-	checkResult(false)
+	CHECK_RESULT(false)
 
 	result = clSetKernelArg(clkConvolve, 6, sizeof(float), &alpha);
-	checkResult(false)
+	CHECK_RESULT(false)
 
 	result = clEnqueueNDRangeKernel(queue, clkConvolve, 3, NULL,
 		globalWorkSize, localWorkSize, 0, NULL, &event);
-	checkResult(false)
+	CHECK_RESULT(false)
 
 	result = clFinish(queue);
-	checkResult(false)
+	CHECK_RESULT(false)
 
 	return true;
 }
 
 // Run all Kernels to prepare an image for ASCII matching
-__declspec(dllexport) bool OCL_MultiConvolve(ImageInfo *imgBufs, KernelInfo *kernels,
+EXPORT bool OCL_MultiConvolve(ImageInfo *imgBufs, KernelInfo *kernels,
 		size_t numKernels) {
 	if (!setMultiConvolveArgs(imgBufs, kernels, numKernels)) return false;
 
@@ -144,11 +144,11 @@ __declspec(dllexport) bool OCL_MultiConvolve(ImageInfo *imgBufs, KernelInfo *ker
 									  1 };
 	const size_t localWorkSize[] = { 1, 1, 1 };
 
-	size_t length = imgBufs[0].width * imgBufs[0].height * 3;
-	cl_mem padded = NULL, sum = NULL, totalOutput = NULL;
+	const size_t length = imgBufs[0].width * imgBufs[0].height * 3;
+	cl_mem sum = NULL, totalOutput = NULL;
 	for (int k = 0; k < numKernels; k++) {
 		result = clSetKernelArg(clkConvolve, 1, sizeof(cl_mem), &multiConvolveArgs->outputs[k]);
-		checkResult(false)
+		CHECK_RESULT(false)
 		totalOutput = clCreateBuffer(context, CL_MEM_READ_WRITE, length, NULL, &result);
 		for (int k2 = 0; k2 < numKernels; k2++) {
 			if (k == k2) {
@@ -174,6 +174,5 @@ __declspec(dllexport) bool OCL_MultiConvolve(ImageInfo *imgBufs, KernelInfo *ker
 		clReleaseMemObject(multiConvolveArgs->outputs[k]);
 		multiConvolveArgs->outputs[k] = totalOutput;
 	}
-	clReleaseMemObject(padded);
 	return true;
 }

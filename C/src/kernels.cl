@@ -1,4 +1,6 @@
 R"(
+// Changes here should have corresponding changes in nocl.c
+
 // Filters an image thru a kernel
 // 2D, img[x, y] = global_id[0] + (imgW * global_id[1])
 __kernel void convolve(constant uchar *img, global uchar *output, constant float *k,
@@ -24,10 +26,14 @@ __kernel void convolve(constant uchar *img, global uchar *output, constant float
 			ip = x + (imgW * y);
 			ik = xRel + (knlSize[0] * yRel);
 			src = vload3(ip, img);
-			pixel += (float3)(src.x * k[ik], src.y * k[ik], src.z * k[ik]);
+			pixel.x += src.x * k[ik];
+			pixel.y += src.y * k[ik];
+			pixel.z += src.z * k[ik];
 		}
 	}
-	pixel = fmax(fmin(pixel * knlMult, 255.f), 0.f);
+	pixel.x = fmax(fmin(pixel.x * knlMult, 255.f), 0.f);
+	pixel.y = fmax(fmin(pixel.y * knlMult, 255.f), 0.f);
+	pixel.z = fmax(fmin(pixel.z * knlMult, 255.f), 0.f);
 	if (knlInvert > 0) pixel = 255.f - pixel;
 	pixel *= alpha;
 	uchar3 out = (uchar3)(pixel.x, pixel.y, pixel.z);
@@ -40,9 +46,9 @@ __kernel void convolve(constant uchar *img, global uchar *output, constant float
 __kernel void addImg(global uchar *a, global uchar *b, global uchar *sum) {
 	size_t i = get_global_id(0);
 	uchar3 a3 = vload3(i, a), b3 = vload3(i, b);
-	uchar3 s = a3 + b3;
-	float3 si = fmax(fmin((float3)(s.x, s.y, s.z), 255.f), 0.f);
-	vstore3((uchar3)(si.x, si.y, si.z), i, sum);
+	float3 s = (float3)(a3.x + b3.x, a3.y + b3.y, a3.z + b3.z);
+	s = (float3)(fmax(fmin(s.x, 255.f), 0.f), fmax(fmin(s.y, 255.f), 0.f), fmax(fmin(s.z, 255.f), 0.f));
+	vstore3((uchar3)(s.x, s.y, s.z), i, sum);
 }
 
 // Multiplies all pixels in an image by a scalar value
@@ -50,10 +56,11 @@ __kernel void addImg(global uchar *a, global uchar *b, global uchar *sum) {
 __kernel void mult(global uchar *a, float m, global uchar *product) {
 	size_t i = get_global_id(0);
 	uchar3 p = vload3(i, a);
-	float3 ip = fmax(fmin((float3)(p.x * m, p.y * m, p.z * m), 255.f), 0.f);
+	float3 ip = (float3)(fmax(fmin(p.x * m, 255.f), 0.f), fmax(fmin(p.y * m, 255.f), 0.f), fmax(fmin(p.z * m, 255.f), 0.f));
 	vstore3((uchar3)(ip.x, ip.y, ip.z), i, product);
 }
 
+// Matches characters to parts of an image
 // Work-item is the size in pixels of one character
 __kernel void characterMatch(constant uchar *imgs, constant int *imgSize,
 		int numImgs, constant uchar *charImg, constant int *charSize,
